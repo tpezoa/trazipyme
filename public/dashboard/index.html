@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TraziPyme — Dashboard</title>
+<style>
+  :root{
+    --green:#2E7D32; --bg:#F4F6F5; --card:#fff; --text:#1B1B1B; --muted:#6B7280;
+    --red:#C0392B; --amber:#B7791F; --border:#E5E7EB;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text);}
+  header{background:var(--green);color:#fff;padding:16px 28px;display:flex;align-items:center;justify-content:space-between;}
+  header h1{font-size:19px;margin:0;}
+  header .sub{font-size:12px;opacity:.85;}
+  select{padding:8px 12px;border-radius:8px;border:none;font-size:14px;}
+  main{max-width:1180px;margin:0 auto;padding:24px 20px 60px;}
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:22px;}
+  .kpi{background:var(--card);border-radius:14px;padding:18px 20px;box-shadow:0 1px 3px rgba(0,0,0,.06);}
+  .kpi .label{font-size:12px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.03em;}
+  .kpi .value{font-size:26px;font-weight:700;margin-top:6px;}
+  .kpi .value.red{color:var(--red);}
+  .kpi .value.amber{color:var(--amber);}
+  .grid2{display:grid;grid-template-columns:1.3fr 1fr;gap:18px;margin-bottom:18px;}
+  .card{background:var(--card);border-radius:14px;padding:20px;box-shadow:0 1px 3px rgba(0,0,0,.06);}
+  .card h2{font-size:15px;margin:0 0 14px;display:flex;align-items:center;justify-content:space-between;}
+  table{width:100%;border-collapse:collapse;font-size:13px;}
+  th{text-align:left;color:var(--muted);font-weight:600;padding:6px 8px;border-bottom:1px solid var(--border);font-size:11px;text-transform:uppercase;}
+  td{padding:8px 8px;border-bottom:1px solid #F0F1F2;}
+  .badge{display:inline-block;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:700;color:#fff;}
+  .badge-green{background:var(--green);}
+  .badge-amber{background:var(--amber);}
+  .badge-red{background:var(--red);}
+  .alert-row{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid #F0F1F2;font-size:13px;}
+  .alert-row:last-child{border-bottom:none;}
+  .alert-row .a-main{font-weight:600;}
+  .alert-row .a-sub{color:var(--muted);font-size:12px;}
+  .empty{color:var(--muted);font-size:13px;padding:10px 0;}
+  .btn-row{display:flex;gap:8px;flex-wrap:wrap;}
+  .btn{padding:9px 14px;border-radius:8px;border:1px solid var(--border);background:#fff;font-size:12px;font-weight:600;cursor:pointer;}
+  .btn:hover{background:#F7F8F8;}
+  .live-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#3FE07A;margin-right:6px;animation:pulse 1.6s infinite;}
+  @keyframes pulse{0%{opacity:1;}50%{opacity:.3;}100%{opacity:1;}}
+  .muted{color:var(--muted);font-size:12px;}
+  @media (max-width:900px){.kpis{grid-template-columns:repeat(2,1fr);}.grid2{grid-template-columns:1fr;}}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>📦 TraziPyme — Dashboard</h1>
+    <div class="sub"><span class="live-dot"></span>Actualización en tiempo real</div>
+  </div>
+  <select id="select-bodega" onchange="reloadAll()"></select>
+</header>
+
+<main>
+  <div class="kpis">
+    <div class="kpi"><div class="label">SKUs activos</div><div class="value" id="kpi-skus">—</div></div>
+    <div class="kpi"><div class="label">Unidades en stock</div><div class="value" id="kpi-unidades">—</div></div>
+    <div class="kpi"><div class="label">Valor de inventario</div><div class="value" id="kpi-valor">—</div></div>
+    <div class="kpi"><div class="label">Alertas activas</div><div class="value amber" id="kpi-alertas">—</div></div>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <h2>Historial de movimientos
+        <span class="muted" id="hist-count"></span>
+      </h2>
+      <table>
+        <thead><tr><th>Fecha</th><th>Producto</th><th>Tipo</th><th>Cant.</th><th>Operario</th></tr></thead>
+        <tbody id="tabla-movimientos"></tbody>
+      </table>
+    </div>
+    <div class="card">
+      <h2>🔔 Alertas</h2>
+      <div id="lista-alertas"></div>
+    </div>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <h2>⚠️ Ventas en riesgo (stock bajo el mínimo)</h2>
+      <table>
+        <thead><tr><th>Producto</th><th>Stock</th><th>Mínimo</th><th>Valor expuesto</th></tr></thead>
+        <tbody id="tabla-riesgo"></tbody>
+      </table>
+      <div class="muted" style="margin-top:10px;">Valor total en riesgo: <strong id="valor-riesgo">$0</strong></div>
+    </div>
+    <div class="card">
+      <h2>📑 Reportes exportables</h2>
+      <p class="muted">Genera reportes en CSV (compatible con Excel) para trazabilidad, mermas y valorización.</p>
+      <div class="btn-row">
+        <button class="btn" onclick="descargar('movimientos')">Trazabilidad por lote</button>
+        <button class="btn" onclick="descargar('mermas')">Mermas y bajas</button>
+        <button class="btn" onclick="descargar('valorizacion')">Valorización de inventario</button>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+const API = '/api';
+let bodegas = [];
+let bodegaActual = '';
+
+async function init(){
+  bodegas = await (await fetch(API+'/bodegas')).json();
+  const sel = document.getElementById('select-bodega');
+  sel.innerHTML = `<option value="">Todas las bodegas</option>` + bodegas.map(b=>`<option value="${b.id}">${b.nombre}</option>`).join('');
+  reloadAll();
+  setInterval(reloadAll, 5000); // refresco "tiempo real" por polling
+}
+
+function reloadAll(){
+  bodegaActual = document.getElementById('select-bodega').value;
+  cargarResumen();
+  cargarMovimientos();
+  cargarAlertas();
+  cargarRiesgo();
+}
+
+function qs(){ return bodegaActual ? `?bodega_id=${bodegaActual}` : ''; }
+
+async function cargarResumen(){
+  const r = await (await fetch(API+'/dashboard/resumen'+qs())).json();
+  document.getElementById('kpi-skus').textContent = r.total_skus;
+  document.getElementById('kpi-unidades').textContent = r.unidades_totales.toLocaleString('es-CL');
+  document.getElementById('kpi-valor').textContent = '$'+r.valor_inventario.toLocaleString('es-CL');
+  document.getElementById('kpi-alertas').textContent = (r.alertas_stock_bajo + r.alertas_vencimiento);
+}
+
+async function cargarMovimientos(){
+  const sep = qs() ? '&' : '?';
+  const arr = await (await fetch(API+'/movimientos'+qs()+sep+'limit=15')).json();
+  document.getElementById('hist-count').textContent = arr.length + ' recientes';
+  const tipoLabel = {ENTRADA:'Entrada', SALIDA:'Salida', MUESTRA:'Muestra'};
+  const badgeClass = {ENTRADA:'badge-green', SALIDA:'badge-red', MUESTRA:'badge-amber'};
+  document.getElementById('tabla-movimientos').innerHTML = arr.length ? arr.map(m=>`
+    <tr>
+      <td class="muted">${new Date(m.fecha+'Z').toLocaleString('es-CL',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}</td>
+      <td>${m.producto_nombre}</td>
+      <td><span class="badge ${badgeClass[m.tipo]}">${tipoLabel[m.tipo]}</span></td>
+      <td>${m.cantidad}</td>
+      <td class="muted">${m.operario}</td>
+    </tr>`).join('') : `<tr><td colspan="5" class="empty">Sin movimientos registrados</td></tr>`;
+}
+
+async function cargarAlertas(){
+  const arr = await (await fetch(API+'/dashboard/alertas'+qs())).json();
+  const icon = {VENCIMIENTO:'⏰', STOCK_BAJO:'📉', SIN_MOVIMIENTO:'💤'};
+  document.getElementById('lista-alertas').innerHTML = arr.length ? arr.map(a=>`
+    <div class="alert-row">
+      <div><div class="a-main">${icon[a.tipo]||'⚠️'} ${a.producto}</div><div class="a-sub">${a.detalle}</div></div>
+    </div>`).join('') : '<div class="empty">Sin alertas activas</div>';
+}
+
+async function cargarRiesgo(){
+  const r = await (await fetch(API+'/dashboard/ventas-riesgo'+qs())).json();
+  document.getElementById('tabla-riesgo').innerHTML = r.productos.length ? r.productos.map(p=>`
+    <tr>
+      <td>${p.nombre}</td><td>${p.stock_actual}</td><td class="muted">${p.stock_minimo}</td>
+      <td>$${p.valor_inventario.toLocaleString('es-CL')}</td>
+    </tr>`).join('') : `<tr><td colspan="4" class="empty">Sin productos bajo el mínimo</td></tr>`;
+  document.getElementById('valor-riesgo').textContent = '$'+r.valor_en_riesgo.toLocaleString('es-CL');
+}
+
+function descargar(tipo){
+  const sep = qs() ? '&' : '?';
+  window.open(API+'/reportes/csv'+qs()+sep+'tipo='+tipo, '_blank');
+}
+
+init();
+</script>
+</body>
+</html>
