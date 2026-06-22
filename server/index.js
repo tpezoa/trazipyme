@@ -206,9 +206,8 @@ app.get('/api/dashboard/ventas-riesgo', (req, res) => {
   });
 });
 
-// ---------- Reportes CSV ----------
-app.get('/api/reportes/csv', (req, res) => {
-  const { tipo = 'movimientos', bodega_id } = req.query;
+// ---------- Reportes (datos compartidos entre CSV y gráficos) ----------
+function obtenerReporte(tipo, bodega_id) {
   let rows = [];
   let headers = [];
   let filename = 'reporte.csv';
@@ -239,6 +238,20 @@ app.get('/api/reportes/csv', (req, res) => {
     ).map(productoConEstado);
     rows = productos.map(p => ({ producto: p.nombre, codigo_interno: p.codigo_interno, lote: p.lote, stock_actual: p.stock_actual, precio_costo: p.precio_costo, valor_inventario: p.valor_inventario }));
   }
+
+  return { rows, headers, filename };
+}
+
+// JSON: misma data que el CSV, pero para alimentar gráficos en el dashboard
+app.get('/api/reportes/datos', (req, res) => {
+  const { tipo = 'movimientos', bodega_id } = req.query;
+  const { rows } = obtenerReporte(tipo, bodega_id);
+  res.json(rows);
+});
+
+app.get('/api/reportes/csv', (req, res) => {
+  const { tipo = 'movimientos', bodega_id } = req.query;
+  const { rows, headers, filename } = obtenerReporte(tipo, bodega_id);
 
   const csv = [headers.join(',')].concat(
     rows.map(r => headers.map(h => `"${(r[h] ?? '').toString().replace(/"/g, '""')}"`).join(','))
