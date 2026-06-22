@@ -158,7 +158,7 @@
     <div class="card">
       <div class="field"><label>Nombre del producto</label><input id="c-nombre" placeholder="Ej: Guantes nitrilo talla M"></div>
       <div class="row">
-        <div class="field"><label>Código interno</label><input id="c-codigo" placeholder="Ej: GUA-010"></div>
+        <div class="field"><label>Código interno</label><input id="c-codigo" placeholder="Ej: GUA-010" onblur="sugerirPrecioPorCodigo()"></div>
         <div class="field"><label>Unidad de medida</label><input id="c-unidad" placeholder="caja / unidad"></div>
       </div>
       <div class="row">
@@ -308,6 +308,22 @@ async function prefillCrear(){
     document.getElementById('c-unidad').value = 'unidad';
     document.getElementById('c-stockmin').value = 5;
   }
+}
+
+// ---------- Sugerir precio/unidad según el último registro con ese código (cualquier bodega) ----------
+async function sugerirPrecioPorCodigo(){
+  const codigo = document.getElementById('c-codigo').value.trim();
+  if(!codigo) return;
+  try{
+    const arr = await (await fetch(`${API}/productos?codigo_interno=${encodeURIComponent(codigo)}`)).json();
+    if(!arr.length) return;
+    const ref = arr[arr.length - 1]; // el más reciente registrado con ese código
+    if(!document.getElementById('c-nombre').value) document.getElementById('c-nombre').value = ref.nombre;
+    document.getElementById('c-unidad').value = ref.unidad_medida;
+    document.getElementById('c-precio').value = ref.precio_costo;
+    document.getElementById('c-stockmin').value = ref.stock_minimo;
+    toast(`💡 Precio sugerido: $${ref.precio_costo.toLocaleString('es-CL')} (según "${ref.nombre}" ya registrado)`);
+  }catch(e){ /* sin conexión: no se sugiere nada, el usuario completa manualmente */ }
 }
 
 // ---------- Imprimir sticker QR (reutilizable: crear y reimprimir al escanear) ----------
