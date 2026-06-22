@@ -162,6 +162,7 @@
         <div class="field"><label>Precio de costo (CLP)</label><input id="c-precio" type="number" min="0" placeholder="0"></div>
         <div class="field"><label>Stock mínimo</label><input id="c-stockmin" type="number" min="0" value="5"></div>
       </div>
+      <div class="field"><label>Stock inicial (unidades que ingresan ahora)</label><input id="c-stock-inicial" type="number" min="0" value="0"></div>
       <button class="btn btn-green" onclick="crearProducto()">Generar QR</button>
     </div>
     <div id="qr-resultado" class="card hidden">
@@ -337,6 +338,8 @@ async function crearProducto(){
     fecha_vencimiento: document.getElementById('c-vencimiento').value,
     precio_costo: Number(document.getElementById('c-precio').value || 0),
     stock_minimo: Number(document.getElementById('c-stockmin').value || 5),
+    stock_inicial: Number(document.getElementById('c-stock-inicial').value || 0),
+    operario: session?.nombre,
   };
   if(!body.nombre || !body.codigo_interno || !body.unidad_medida){ toast('Completa nombre, código y unidad'); return; }
   const res = await fetch(API+'/productos', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
@@ -349,7 +352,8 @@ async function crearProducto(){
   div.appendChild(canvas);
   document.getElementById('qr-label').textContent = `${body.nombre} — ${body.codigo_interno}`;
   document.getElementById('qr-resultado').classList.remove('hidden');
-  toast('✓ Producto y QR generados');
+  toast('✓ Producto y QR generados — ya disponible en bodega, historial y dashboard');
+  loadResumen();
 }
 
 // ---------- Historial ----------
