@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>TraziPyme — Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <style>
   :root{
     --green:#2E7D32; --bg:#F4F6F5; --card:#fff; --text:#1B1B1B; --muted:#6B7280;
@@ -40,6 +41,7 @@
   .btn-row{display:flex;gap:8px;flex-wrap:wrap;}
   .btn{padding:9px 14px;border-radius:8px;border:1px solid var(--border);background:#fff;font-size:12px;font-weight:600;cursor:pointer;}
   .btn:hover{background:#F7F8F8;}
+  .graf-tab.active{background:var(--green);color:#fff;border-color:var(--green);}
   .live-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#3FE07A;margin-right:6px;animation:pulse 1.6s infinite;}
   @keyframes pulse{0%{opacity:1;}50%{opacity:.3;}100%{opacity:1;}}
   .muted{color:var(--muted);font-size:12px;}
@@ -98,6 +100,21 @@
       </div>
     </div>
   </div>
+
+  <div class="card" style="margin-bottom:18px;">
+    <h2>📊 Gráficos
+      <span class="muted" id="grafico-info"></span>
+    </h2>
+    <div class="btn-row" style="margin-bottom:14px;">
+      <button class="btn graf-tab active" data-tipo="movimientos" onclick="cambiarGrafico('movimientos')">Trazabilidad por lote</button>
+      <button class="btn graf-tab" data-tipo="mermas" onclick="cambiarGrafico('mermas')">Mermas y bajas</button>
+      <button class="btn graf-tab" data-tipo="valorizacion" onclick="cambiarGrafico('valorizacion')">Valorización de inventario</button>
+    </div>
+    <div style="position:relative;height:340px;">
+      <canvas id="chart-reporte"></canvas>
+    </div>
+    <div class="empty" id="grafico-empty" style="display:none;text-align:center;">Sin datos para este reporte todavía.</div>
+  </div>
 </main>
 
 <script>
@@ -119,6 +136,7 @@ function reloadAll(){
   cargarMovimientos();
   cargarAlertas();
   cargarRiesgo();
+  cargarGrafico();
 }
 
 function qs(){ return bodegaActual ? `?bodega_id=${bodegaActual}` : ''; }
@@ -169,6 +187,86 @@ async function cargarRiesgo(){
 function descargar(tipo){
   const sep = qs() ? '&' : '?';
   window.open(API+'/reportes/csv'+qs()+sep+'tipo='+tipo, '_blank');
+}
+
+// ---------- Gráficos (mismos datos que los reportes CSV) ----------
+let chartInstance = null;
+let tipoGraficoActual = 'movimientos';
+
+function cambiarGrafico(tipo){
+  tipoGraficoActual = tipo;
+  document.querySelectorAll('.graf-tab').forEach(b=>b.classList.toggle('active', b.dataset.tipo===tipo));
+  cargarGrafico();
+}
+
+function paleta(n){
+  const colores = ['#2E7D32','#1B5E20','#3FE07A','#B7791F','#C0392B','#6B7280','#0E7490','#7C3AED','#DB2777','#F59E0B'];
+  const out=[];
+  for(let i=0;i<n;i++) out.push(colores[i%colores.length]);
+  return out;
+}
+
+async function cargarGrafico(){
+  const tipo = tipoGraficoActual;
+  const sep = qs() ? '&' : '?';
+  const rows = await (await fetch(API+'/reportes/datos'+qs()+sep+'tipo='+tipo)).json();
+  const empty = document.getElementById('grafico-empty');
+  const canvas = document.getElementById('chart-reporte');
+
+  if(!rows.length){
+    empty.style.display='block'; canvas.style.display='none';
+    document.getElementById('grafico-info').textContent='';
+    if(chartInstance){ chartInstance.destroy(); chartInstance=null; }
+    return;
+  }
+  empty.style.display='none'; canvas.style.display='block';
+
+  let config;
+  if(tipo==='movimientos'){
+    const lotes = {};
+    for(const r of rows){
+      const key = r.lote || 's/lote';
+      lotes[key] = lotes[key] || {ENTRADA:0, SALIDA:0, MUESTRA:0};
+      lotes[key][r.tipo] = (lotes[key][r.tipo]||0) + r.cantidad;
+    }
+    const labels = Object.keys(lotes);
+    config = {
+      type:'bar',
+      data:{ labels, datasets:[
+        {label:'Entradas', data: labels.map(l=>lotes[l].ENTRADA), backgroundColor:'#2E7D32'},
+        {label:'Salidas', data: labels.map(l=>lotes[l].SALIDA), backgroundColor:'#C0392B'},
+        {label:'Muestras', data: labels.map(l=>lotes[l].MUESTRA), backgroundColor:'#B7791F'},
+      ]},
+      options:{ responsive:true, maintainAspectRatio:false,
+        scales:{ x:{stacked:true}, y:{stacked:true, beginAtZero:true} },
+        plugins:{ title:{display:true, text:'Movimientos por lote'} } }
+    };
+    document.getElementById('grafico-info').textContent = rows.length+' movimientos';
+  } else if(tipo==='mermas'){
+    const porProducto = {};
+    for(const r of rows){ porProducto[r.producto] = (porProducto[r.producto]||0) + r.cantidad; }
+    const labels = Object.keys(porProducto);
+    config = {
+      type:'bar',
+      data:{ labels, datasets:[{label:'Unidades en muestras/mermas', data: labels.map(l=>porProducto[l]), backgroundColor:'#B7791F'}] },
+      options:{ responsive:true, maintainAspectRatio:false, indexAxis:'y',
+        scales:{ x:{beginAtZero:true} },
+        plugins:{ title:{display:true, text:'Mermas y bajas por producto'} } }
+    };
+    document.getElementById('grafico-info').textContent = rows.length+' registros';
+  } else if(tipo==='valorizacion'){
+    config = {
+      type:'pie',
+      data:{ labels: rows.map(r=>r.producto), datasets:[{ data: rows.map(r=>r.valor_inventario), backgroundColor: paleta(rows.length) }] },
+      options:{ responsive:true, maintainAspectRatio:false,
+        plugins:{ title:{display:true, text:'Valorización de inventario por producto'} } }
+    };
+    const total = rows.reduce((s,r)=>s+r.valor_inventario,0);
+    document.getElementById('grafico-info').textContent = '$'+total.toLocaleString('es-CL')+' total';
+  }
+
+  if(chartInstance) chartInstance.destroy();
+  chartInstance = new Chart(canvas.getContext('2d'), config);
 }
 
 init();
