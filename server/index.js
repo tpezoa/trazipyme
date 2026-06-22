@@ -252,8 +252,11 @@ app.get('/api/reportes/csv', (req, res) => {
 app.get('/', (req, res) => res.redirect('/app'));
 
 const PORT = process.env.PORT || 3000;
+// En Render, RENDER_EXTERNAL_URL trae la URL pública real (ej: https://trazipyme.onrender.com).
+// Si no existe (corriendo en tu computador), se usa localhost como antes.
+const BASE_URL = process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`;
 app.listen(PORT, () => {
-  console.log(`TraziPyme corriendo en http://localhost:${PORT}`);
-  console.log(`  App móvil:   http://localhost:${PORT}/app`);
-  console.log(`  Dashboard:   http://localhost:${PORT}/dashboard`);
+  console.log(`TraziPyme corriendo en ${BASE_URL}`);
+  console.log(`  App móvil:   ${BASE_URL}/app`);
+  console.log(`  Dashboard:   ${BASE_URL}/dashboard`);
 });
