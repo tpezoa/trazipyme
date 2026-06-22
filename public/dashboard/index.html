@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>TraziPyme — Dashboard</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
 <style>
   :root{
     --green:#2E7D32; --bg:#F4F6F5; --card:#fff; --text:#1B1B1B; --muted:#6B7280;
@@ -45,6 +46,12 @@
   .live-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#3FE07A;margin-right:6px;animation:pulse 1.6s infinite;}
   @keyframes pulse{0%{opacity:1;}50%{opacity:.3;}100%{opacity:1;}}
   .muted{color:var(--muted);font-size:12px;}
+  .qr-search{padding:8px 12px;border-radius:8px;border:1px solid var(--border);font-size:13px;width:220px;}
+  .qr-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px;margin-top:14px;}
+  .qr-card{border:1px solid var(--border);border-radius:10px;padding:12px;text-align:center;}
+  .qr-card canvas{width:100%;height:auto;}
+  .qr-card .qn{font-weight:600;font-size:12px;margin-top:8px;}
+  .qr-card .qc{color:var(--muted);font-size:11px;margin-top:2px;}
   @media (max-width:900px){.kpis{grid-template-columns:repeat(2,1fr);}.grid2{grid-template-columns:1fr;}}
 </style>
 </head>
@@ -102,6 +109,15 @@
   </div>
 
   <div class="card" style="margin-bottom:18px;">
+    <h2>🔳 Códigos QR
+      <span class="muted" id="qr-count"></span>
+    </h2>
+    <p class="muted" style="margin-top:-6px;">Lista en vivo de los QR actuales — útil para escanear y mostrar en la presentación. Se actualiza sola al crear productos nuevos.</p>
+    <input class="qr-search" id="qr-buscar" placeholder="Buscar por nombre o código..." oninput="renderQRs()">
+    <div class="qr-grid" id="qr-grid"></div>
+  </div>
+
+  <div class="card" style="margin-bottom:18px;">
     <h2>📊 Gráficos
       <span class="muted" id="grafico-info"></span>
     </h2>
@@ -137,6 +153,7 @@ function reloadAll(){
   cargarAlertas();
   cargarRiesgo();
   cargarGrafico();
+  cargarQRs();
 }
 
 function qs(){ return bodegaActual ? `?bodega_id=${bodegaActual}` : ''; }
@@ -187,6 +204,32 @@ async function cargarRiesgo(){
 function descargar(tipo){
   const sep = qs() ? '&' : '?';
   window.open(API+'/reportes/csv'+qs()+sep+'tipo='+tipo, '_blank');
+}
+
+// ---------- Galería de QR en vivo (para escanear/mostrar en la presentación) ----------
+let productosQR = [];
+async function cargarQRs(){
+  productosQR = await (await fetch(API+'/productos'+qs())).json();
+  renderQRs();
+}
+function renderQRs(){
+  const filtro = (document.getElementById('qr-buscar').value || '').toLowerCase().trim();
+  const lista = !filtro ? productosQR : productosQR.filter(p =>
+    p.nombre.toLowerCase().includes(filtro) || p.codigo_interno.toLowerCase().includes(filtro)
+  );
+  document.getElementById('qr-count').textContent = lista.length + (lista.length===1 ? ' código' : ' códigos');
+  const cont = document.getElementById('qr-grid');
+  if(!lista.length){ cont.innerHTML = '<div class="empty">Sin productos para mostrar</div>'; return; }
+  cont.innerHTML = lista.map(p => `
+    <div class="qr-card">
+      <canvas id="qrc-${p.id}"></canvas>
+      <div class="qn">${p.nombre}</div>
+      <div class="qc">${p.codigo_interno}${p.lote ? ' · '+p.lote : ''}</div>
+    </div>`).join('');
+  lista.forEach(p => {
+    const c = document.getElementById('qrc-'+p.id);
+    if(c) QRCode.toCanvas(c, p.codigo_interno, {width:140, color:{dark:'#1B1B1B', light:'#ffffff'}});
+  });
 }
 
 // ---------- Gráficos (mismos datos que los reportes CSV) ----------
