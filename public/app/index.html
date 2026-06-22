@@ -208,6 +208,7 @@ let productoCreado = null;
 let stream = null;
 let scanLoop = null;
 let lastMovId = null;
+let prefillOverride = null; // datos de un producto de OTRA bodega, para precargar "Crear QR"
 
 function pinPress(d){
   if(pin.length>=4) return;
@@ -281,13 +282,27 @@ function loteActual(){
 
 // ---------- Predeterminados al crear producto (según lo que ya hay en stock) ----------
 async function prefillCrear(){
+  document.getElementById('qr-resultado').classList.add('hidden');
+  // Si venimos de escanear un QR de OTRA bodega, precargamos sus datos
+  // (nombre, unidad, precio, stock mínimo) para generar el QR local con un clic.
+  if(prefillOverride){
+    const o = prefillOverride; prefillOverride = null;
+    document.getElementById('c-nombre').value = o.nombre || '';
+    document.getElementById('c-codigo').value = o.codigo_interno || '';
+    document.getElementById('c-unidad').value = o.unidad_medida || 'unidad';
+    document.getElementById('c-precio').value = o.precio_costo || '';
+    document.getElementById('c-stockmin').value = o.stock_minimo || 5;
+    document.getElementById('c-lote').value = loteActual();
+    document.getElementById('c-vencimiento').value = '';
+    document.getElementById('c-stock-inicial').value = 0;
+    return;
+  }
   document.getElementById('c-nombre').value = '';
   document.getElementById('c-codigo').value = '';
   document.getElementById('c-precio').value = '';
   document.getElementById('c-stock-inicial').value = 0;
   document.getElementById('c-vencimiento').value = '';
   document.getElementById('c-lote').value = loteActual();
-  document.getElementById('qr-resultado').classList.add('hidden');
   try{
     const productos = await (await fetch(API+'/productos?bodega_id='+bodegaActual)).json();
     if(productos.length){
@@ -380,15 +395,31 @@ function buscarManual(){
 async function buscarProducto(codigo){
   const res = await fetch(`${API}/productos?codigo_interno=${encodeURIComponent(codigo)}&bodega_id=${bodegaActual}`);
   const arr = await res.json();
-  if(!arr.length){ toast('QR no reconocido: producto no encontrado'); return; }
-  productoEscaneado = arr[0];
-  document.getElementById('producto-info').innerHTML = `
-    <div style="font-weight:700;font-size:16px;">${productoEscaneado.nombre}</div>
-    <div class="muted">Código: ${productoEscaneado.codigo_interno} · Lote: ${productoEscaneado.lote||'s/n'}</div>
-    <div class="muted">Stock actual: ${productoEscaneado.stock_actual} ${productoEscaneado.unidad_medida}</div>
-  `;
-  onTipoChange();
-  showScreen('confirmar');
+  if(arr.length){
+    productoEscaneado = arr[0];
+    document.getElementById('producto-info').innerHTML = `
+      <div style="font-weight:700;font-size:16px;">${productoEscaneado.nombre}</div>
+      <div class="muted">Código: ${productoEscaneado.codigo_interno} · Lote: ${productoEscaneado.lote||'s/n'}</div>
+      <div class="muted">Stock actual: ${productoEscaneado.stock_actual} ${productoEscaneado.unidad_medida}</div>
+    `;
+    onTipoChange();
+    showScreen('confirmar');
+    return;
+  }
+  // No existe en esta bodega: el QR es leíble igual, solo que es de otra sucursal.
+  // Buscamos el código en cualquier bodega para ofrecer generar un QR local con los mismos datos.
+  await ofrecerCrearDesdeOtraBodega(codigo);
+}
+
+async function ofrecerCrearDesdeOtraBodega(codigo){
+  const resAny = await fetch(`${API}/productos?codigo_interno=${encodeURIComponent(codigo)}`);
+  const arrAny = await resAny.json();
+  if(!arrAny.length){ toast('QR no reconocido: producto no encontrado'); return; }
+  const ref = arrAny[arrAny.length - 1]; // el más reciente registrado con ese código, en cualquier bodega
+  const origen = bodegas.find(b => b.id == ref.bodega_id);
+  prefillOverride = ref;
+  showScreen('crear');
+  toast(`📦 Este QR pertenece a "${origen ? origen.nombre : 'otra sucursal'}". Completa y genera el QR para esta bodega.`);
 }
 function onTipoChange(){
   const tipo = document.getElementById('tipo-movimiento').value;
