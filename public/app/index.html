@@ -59,6 +59,12 @@
   .center{text-align:center;}
   h2{font-size:16px;margin:0 0 12px;}
   .muted{color:var(--muted);font-size:13px;}
+  #qr-print-area{display:none;}
+  @media print{
+    body *{visibility:hidden;}
+    #qr-print-area{display:block !important;visibility:visible;position:absolute;top:0;left:0;width:100%;text-align:center;padding:50px 20px;}
+    #qr-print-area *{visibility:visible;}
+  }
 </style>
 </head>
 <body>
@@ -125,6 +131,7 @@
   <div id="screen-confirmar" class="screen hidden">
     <h2>Registrar movimiento</h2>
     <div class="card" id="producto-info"></div>
+    <button class="btn btn-outline" style="margin-bottom:14px;" onclick="imprimirQRConfirmado()">🖨️ Ver / imprimir QR</button>
     <div class="field">
       <label>Tipo de movimiento</label>
       <select id="tipo-movimiento" onchange="onTipoChange()">
@@ -155,7 +162,7 @@
         <div class="field"><label>Unidad de medida</label><input id="c-unidad" placeholder="caja / unidad"></div>
       </div>
       <div class="row">
-        <div class="field"><label>Número de lote</label><input id="c-lote" placeholder="Ej: L2026-050"></div>
+        <div class="field"><label>Número de lote (auto: año-semana actual)</label><input id="c-lote" placeholder="Ej: L2026-26"></div>
         <div class="field"><label>Fecha de vencimiento</label><input id="c-vencimiento" type="date"></div>
       </div>
       <div class="row">
@@ -168,7 +175,7 @@
     <div id="qr-resultado" class="card hidden">
       <div class="center" id="qr-canvas-display"></div>
       <div class="center muted" id="qr-label"></div>
-      <button class="btn btn-outline" style="margin-top:10px;" onclick="window.print()">🖨️ Imprimir sticker</button>
+      <button class="btn btn-outline" style="margin-top:10px;" onclick="imprimirQRCreado()">🖨️ Imprimir sticker</button>
     </div>
     <button class="btn btn-secondary" onclick="showScreen('home')">Volver</button>
   </div>
@@ -179,6 +186,8 @@
     <div class="card" id="historial-list">Cargando...</div>
     <button class="btn btn-secondary" onclick="showScreen('home')">Volver</button>
   </div>
+
+  <div id="qr-print-area"></div>
 
   <div class="bottom-nav hidden" id="bottom-nav">
     <div class="nav-item" onclick="showScreen('home')"><span class="ic">🏠</span>Inicio</div>
@@ -195,6 +204,7 @@ let session = null; // {id, nombre}
 let bodegas = [];
 let bodegaActual = null;
 let productoEscaneado = null;
+let productoCreado = null;
 let stream = null;
 let scanLoop = null;
 let lastMovId = null;
@@ -255,6 +265,72 @@ function showScreen(name){
   if(name==='scan') startScanner();
   else stopScanner();
   if(name==='historial') loadHistorial();
+  if(name==='crear') prefillCrear();
+}
+
+// ---------- Lote automático (L-AÑO-SEMANA ISO actual) ----------
+function loteActual(){
+  const hoy = new Date();
+  const d = new Date(Date.UTC(hoy.getFullYear(), hoy.getMonth(), hoy.getDate()));
+  const diaSemana = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - diaSemana);
+  const inicioAno = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  const semana = Math.ceil((((d - inicioAno) / 86400000) + 1) / 7);
+  return `L${d.getUTCFullYear()}-${String(semana).padStart(2,'0')}`;
+}
+
+// ---------- Predeterminados al crear producto (según lo que ya hay en stock) ----------
+async function prefillCrear(){
+  document.getElementById('c-nombre').value = '';
+  document.getElementById('c-codigo').value = '';
+  document.getElementById('c-precio').value = '';
+  document.getElementById('c-stock-inicial').value = 0;
+  document.getElementById('c-vencimiento').value = '';
+  document.getElementById('c-lote').value = loteActual();
+  document.getElementById('qr-resultado').classList.add('hidden');
+  try{
+    const productos = await (await fetch(API+'/productos?bodega_id='+bodegaActual)).json();
+    if(productos.length){
+      const conteoUnidad = {};
+      let sumaStockMin = 0;
+      for(const p of productos){
+        conteoUnidad[p.unidad_medida] = (conteoUnidad[p.unidad_medida]||0) + 1;
+        sumaStockMin += p.stock_minimo;
+      }
+      const unidadDefault = Object.keys(conteoUnidad).sort((a,b)=>conteoUnidad[b]-conteoUnidad[a])[0];
+      document.getElementById('c-unidad').value = unidadDefault || 'unidad';
+      document.getElementById('c-stockmin').value = Math.round(sumaStockMin / productos.length) || 5;
+    } else {
+      document.getElementById('c-unidad').value = 'unidad';
+      document.getElementById('c-stockmin').value = 5;
+    }
+  }catch(e){
+    document.getElementById('c-unidad').value = 'unidad';
+    document.getElementById('c-stockmin').value = 5;
+  }
+}
+
+// ---------- Imprimir sticker QR (reutilizable: crear y reimprimir al escanear) ----------
+async function imprimirQR(nombre, codigo, lote){
+  const area = document.getElementById('qr-print-area');
+  area.innerHTML = '';
+  const canvas = document.createElement('canvas');
+  await QRCode.toCanvas(canvas, codigo, {width:220, color:{dark:'#1B1B1B', light:'#ffffff'}});
+  area.appendChild(canvas);
+  const info = document.createElement('div');
+  info.style.marginTop = '10px';
+  info.style.fontFamily = 'sans-serif';
+  info.innerHTML = `<div style="font-weight:700;font-size:16px;">${nombre}</div><div style="font-size:13px;">${codigo}${lote ? ' · Lote: '+lote : ''}</div>`;
+  area.appendChild(info);
+  setTimeout(()=>window.print(), 80);
+}
+function imprimirQRCreado(){
+  if(!productoCreado) return;
+  imprimirQR(productoCreado.nombre, productoCreado.codigo, productoCreado.lote);
+}
+function imprimirQRConfirmado(){
+  if(!productoEscaneado) return;
+  imprimirQR(productoEscaneado.nombre, productoEscaneado.codigo_interno, productoEscaneado.lote);
 }
 
 // ---------- Escaneo QR ----------
@@ -352,6 +428,7 @@ async function crearProducto(){
   div.appendChild(canvas);
   document.getElementById('qr-label').textContent = `${body.nombre} — ${body.codigo_interno}`;
   document.getElementById('qr-resultado').classList.remove('hidden');
+  productoCreado = { nombre: body.nombre, codigo: body.codigo_interno, lote: body.lote };
   toast('✓ Producto y QR generados — ya disponible en bodega, historial y dashboard');
   loadResumen();
 }
