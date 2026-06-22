@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>TraziPyme — App</title>
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+<style>
+  :root{
+    --green:#2E7D32; --green-dark:#1B5E20; --bg:#F4F6F5; --card:#ffffff;
+    --text:#1B1B1B; --muted:#6B7280; --red:#C0392B; --amber:#B7791F; --radius:16px;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text);}
+  #app{max-width:430px;margin:0 auto;min-height:100vh;background:var(--bg);display:flex;flex-direction:column;}
+  .topbar{background:var(--green);color:#fff;padding:18px 20px 14px;display:flex;align-items:center;justify-content:space-between;}
+  .topbar h1{font-size:18px;margin:0;font-weight:700;}
+  .topbar .sub{font-size:12px;opacity:.85;margin-top:2px;}
+  .screen{flex:1;padding:16px;padding-bottom:90px;}
+  .hidden{display:none !important;}
+  .card{background:var(--card);border-radius:var(--radius);padding:18px;margin-bottom:14px;box-shadow:0 1px 3px rgba(0,0,0,.06);}
+  .btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:16px;border:none;border-radius:14px;font-size:16px;font-weight:700;cursor:pointer;min-height:64px;}
+  .btn-green{background:var(--green);color:#fff;}
+  .btn-green:active{background:var(--green-dark);}
+  .btn-outline{background:#fff;color:var(--green);border:2px solid var(--green);}
+  .btn-secondary{background:#EEF1F0;color:var(--text);}
+  .btn-red{background:var(--red);color:#fff;}
+  .menu-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+  .menu-tile{background:var(--card);border-radius:var(--radius);padding:22px 10px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.06);cursor:pointer;}
+  .menu-tile .icon{font-size:30px;margin-bottom:8px;}
+  .menu-tile .label{font-size:13px;font-weight:600;}
+  input,select{width:100%;padding:13px;border-radius:10px;border:1px solid #DADDE0;font-size:15px;margin-bottom:10px;background:#fff;}
+  label{font-size:12px;color:var(--muted);font-weight:600;display:block;margin-bottom:4px;}
+  .field{margin-bottom:12px;}
+  .pin-dots{display:flex;justify-content:center;gap:14px;margin:30px 0;}
+  .pin-dot{width:16px;height:16px;border-radius:50%;border:2px solid var(--green);}
+  .pin-dot.filled{background:var(--green);}
+  .keypad{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;}
+  .keypad button{padding:18px;font-size:20px;border-radius:12px;border:none;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.06);}
+  #qr-video{width:100%;border-radius:var(--radius);background:#000;aspect-ratio:1/1;object-fit:cover;}
+  .scan-box{position:relative;}
+  .scan-overlay{position:absolute;inset:0;border:3px solid #fff;border-radius:var(--radius);box-shadow:0 0 0 999px rgba(0,0,0,.35);margin:15%;pointer-events:none;}
+  .badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;color:#fff;}
+  .badge-green{background:var(--green);}
+  .badge-amber{background:var(--amber);}
+  .badge-red{background:var(--red);}
+  .bottom-nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:430px;background:#fff;display:flex;border-top:1px solid #E5E7EB;}
+  .nav-item{flex:1;text-align:center;padding:10px 0 8px;font-size:11px;color:var(--muted);cursor:pointer;}
+  .nav-item.active{color:var(--green);font-weight:700;}
+  .nav-item .ic{font-size:20px;display:block;}
+  .toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:#1B1B1B;color:#fff;padding:12px 20px;border-radius:30px;font-size:14px;max-width:380px;text-align:center;z-index:50;}
+  .row{display:flex;gap:10px;}
+  .row > *{flex:1;}
+  .hist-item{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid #F0F1F2;font-size:13px;}
+  .hist-item .h-main{font-weight:600;}
+  .hist-item .h-sub{color:var(--muted);font-size:12px;}
+  #qr-canvas-display{display:flex;justify-content:center;margin:14px 0;}
+  .center{text-align:center;}
+  h2{font-size:16px;margin:0 0 12px;}
+  .muted{color:var(--muted);font-size:13px;}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- LOGIN -->
+  <div id="screen-login" class="screen" style="display:flex;flex-direction:column;justify-content:center;align-items:center;padding-top:60px;">
+    <div class="center" style="margin-bottom:10px;">
+      <div style="font-size:40px;">📦</div>
+      <h1 style="font-size:22px;color:var(--green);margin:6px 0 2px;">TraziPyme</h1>
+      <div class="muted">Inventario simple para tu bodega</div>
+    </div>
+    <div class="pin-dots" id="pin-dots">
+      <div class="pin-dot"></div><div class="pin-dot"></div><div class="pin-dot"></div><div class="pin-dot"></div>
+    </div>
+    <div class="keypad" style="width:100%;max-width:280px;">
+      <button onclick="pinPress('1')">1</button><button onclick="pinPress('2')">2</button><button onclick="pinPress('3')">3</button>
+      <button onclick="pinPress('4')">4</button><button onclick="pinPress('5')">5</button><button onclick="pinPress('6')">6</button>
+      <button onclick="pinPress('7')">7</button><button onclick="pinPress('8')">8</button><button onclick="pinPress('9')">9</button>
+      <button onclick="pinClear()">⌫</button><button onclick="pinPress('0')">0</button><button></button>
+    </div>
+    <div class="muted" style="margin-top:18px;">PIN demo: 1234 (Juan Pérez, operario)</div>
+  </div>
+
+  <!-- HOME -->
+  <div id="screen-home" class="screen hidden">
+    <div class="topbar" style="margin:-16px -16px 16px;">
+      <div><h1 id="home-greeting">Hola</h1><div class="sub" id="home-bodega-label">Bodega Central</div></div>
+      <div onclick="logout()" style="cursor:pointer;">🚪</div>
+    </div>
+    <div class="field">
+      <label>Bodega activa</label>
+      <select id="select-bodega" onchange="onBodegaChange()"></select>
+    </div>
+    <div class="menu-grid">
+      <div class="menu-tile" onclick="showScreen('scan')"><div class="icon">📷</div><div class="label">Escanear QR</div></div>
+      <div class="menu-tile" onclick="showScreen('crear')"><div class="icon">➕</div><div class="label">Crear QR</div></div>
+      <div class="menu-tile" onclick="showScreen('historial')"><div class="icon">🕓</div><div class="label">Historial</div></div>
+      <div class="menu-tile" onclick="undoLast()"><div class="icon">↩️</div><div class="label">Deshacer último escaneo</div></div>
+    </div>
+    <div class="card" style="margin-top:14px;">
+      <h2>Resumen rápido</h2>
+      <div id="home-resumen" class="muted">Cargando...</div>
+    </div>
+  </div>
+
+  <!-- SCAN -->
+  <div id="screen-scan" class="screen hidden">
+    <h2>Escanear producto</h2>
+    <div class="scan-box">
+      <video id="qr-video" autoplay playsinline></video>
+      <div class="scan-overlay"></div>
+    </div>
+    <div class="muted center" style="margin:10px 0;">Apunta la cámara al código QR del producto</div>
+    <div class="card">
+      <label>O ingresa el código manualmente</label>
+      <input id="manual-code" placeholder="Ej: JER-001">
+      <button class="btn btn-outline" onclick="buscarManual()">Buscar producto</button>
+    </div>
+    <button class="btn btn-secondary" onclick="showScreen('home')">Cancelar</button>
+  </div>
+
+  <!-- CONFIRM MOVIMIENTO -->
+  <div id="screen-confirmar" class="screen hidden">
+    <h2>Registrar movimiento</h2>
+    <div class="card" id="producto-info"></div>
+    <div class="field">
+      <label>Tipo de movimiento</label>
+      <select id="tipo-movimiento" onchange="onTipoChange()">
+        <option value="ENTRADA">Entrada</option>
+        <option value="SALIDA">Salida</option>
+        <option value="MUESTRA">Salida por muestra (sin venta)</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Cantidad</label>
+      <input id="cantidad-movimiento" type="number" min="1" value="1">
+    </div>
+    <div id="campos-muestra" class="hidden">
+      <div class="field"><label>Responsable del retiro</label><input id="responsable-muestra" placeholder="Nombre"></div>
+      <div class="field"><label>Destino de la muestra</label><input id="destino-muestra" placeholder="Ej: Cliente / control de calidad"></div>
+    </div>
+    <button class="btn btn-green" id="btn-confirmar" onclick="confirmarMovimiento()">✓ Confirmar</button>
+    <button class="btn btn-secondary" style="margin-top:10px;" onclick="showScreen('home')">Cancelar</button>
+  </div>
+
+  <!-- CREAR QR -->
+  <div id="screen-crear" class="screen hidden">
+    <h2>Crear producto y generar QR</h2>
+    <div class="card">
+      <div class="field"><label>Nombre del producto</label><input id="c-nombre" placeholder="Ej: Guantes nitrilo talla M"></div>
+      <div class="row">
+        <div class="field"><label>Código interno</label><input id="c-codigo" placeholder="Ej: GUA-010"></div>
+        <div class="field"><label>Unidad de medida</label><input id="c-unidad" placeholder="caja / unidad"></div>
+      </div>
+      <div class="row">
+        <div class="field"><label>Número de lote</label><input id="c-lote" placeholder="Ej: L2026-050"></div>
+        <div class="field"><label>Fecha de vencimiento</label><input id="c-vencimiento" type="date"></div>
+      </div>
+      <div class="row">
+        <div class="field"><label>Precio de costo (CLP)</label><input id="c-precio" type="number" min="0" placeholder="0"></div>
+        <div class="field"><label>Stock mínimo</label><input id="c-stockmin" type="number" min="0" value="5"></div>
+      </div>
+      <button class="btn btn-green" onclick="crearProducto()">Generar QR</button>
+    </div>
+    <div id="qr-resultado" class="card hidden">
+      <div class="center" id="qr-canvas-display"></div>
+      <div class="center muted" id="qr-label"></div>
+      <button class="btn btn-outline" style="margin-top:10px;" onclick="window.print()">🖨️ Imprimir sticker</button>
+    </div>
+    <button class="btn btn-secondary" onclick="showScreen('home')">Volver</button>
+  </div>
+
+  <!-- HISTORIAL -->
+  <div id="screen-historial" class="screen hidden">
+    <h2>Historial de movimientos</h2>
+    <div class="card" id="historial-list">Cargando...</div>
+    <button class="btn btn-secondary" onclick="showScreen('home')">Volver</button>
+  </div>
+
+  <div class="bottom-nav hidden" id="bottom-nav">
+    <div class="nav-item" onclick="showScreen('home')"><span class="ic">🏠</span>Inicio</div>
+    <div class="nav-item" onclick="showScreen('scan')"><span class="ic">📷</span>Escanear</div>
+    <div class="nav-item" onclick="showScreen('crear')"><span class="ic">➕</span>Crear</div>
+    <div class="nav-item" onclick="showScreen('historial')"><span class="ic">🕓</span>Historial</div>
+  </div>
+</div>
+
+<script>
+const API = '/api';
+let pin = '';
+let session = null; // {id, nombre}
+let bodegas = [];
+let bodegaActual = null;
+let productoEscaneado = null;
+let stream = null;
+let scanLoop = null;
+let lastMovId = null;
+
+function pinPress(d){
+  if(pin.length>=4) return;
+  pin += d;
+  renderPinDots();
+  if(pin.length===4) doLogin();
+}
+function pinClear(){ pin=''; renderPinDots(); }
+function renderPinDots(){
+  document.querySelectorAll('.pin-dot').forEach((el,i)=> el.classList.toggle('filled', i < pin.length));
+}
+
+async function doLogin(){
+  const res = await fetch(API+'/login', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({pin})});
+  if(!res.ok){ toast('PIN incorrecto'); pin=''; renderPinDots(); return; }
+  session = await res.json();
+  await loadBodegas();
+  document.getElementById('home-greeting').textContent = 'Hola, ' + session.nombre.split(' ')[0];
+  showScreen('home');
+  document.getElementById('bottom-nav').classList.remove('hidden');
+}
+
+function logout(){
+  session = null; pin=''; renderPinDots();
+  document.getElementById('bottom-nav').classList.add('hidden');
+  showScreen('login');
+}
+
+async function loadBodegas(){
+  bodegas = await (await fetch(API+'/bodegas')).json();
+  const sel = document.getElementById('select-bodega');
+  sel.innerHTML = bodegas.map(b=>`<option value="${b.id}">${b.nombre}</option>`).join('');
+  bodegaActual = bodegas[0]?.id;
+  onBodegaChange();
+}
+function onBodegaChange(){
+  bodegaActual = document.getElementById('select-bodega').value;
+  const b = bodegas.find(x=>x.id==bodegaActual);
+  document.getElementById('home-bodega-label').textContent = b ? b.nombre : '';
+  loadResumen();
+}
+
+async function loadResumen(){
+  const r = await (await fetch(API+'/dashboard/resumen?bodega_id='+bodegaActual)).json();
+  document.getElementById('home-resumen').innerHTML =
+    `${r.total_skus} SKUs · ${r.unidades_totales} unidades · $${r.valor_inventario.toLocaleString('es-CL')} en inventario` +
+    (r.alertas_stock_bajo+r.alertas_vencimiento>0 ? `<br><span class="badge badge-amber" style="margin-top:6px;">${r.alertas_stock_bajo+r.alertas_vencimiento} alertas activas</span>` : '');
+}
+
+function showScreen(name){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.add('hidden'));
+  document.getElementById('screen-'+name).classList.remove('hidden');
+  document.querySelectorAll('.nav-item').forEach((el,i)=>el.classList.remove('active'));
+  if(name==='home') loadResumen();
+  if(name==='scan') startScanner();
+  else stopScanner();
+  if(name==='historial') loadHistorial();
+}
+
+// ---------- Escaneo QR ----------
+async function startScanner(){
+  const video = document.getElementById('qr-video');
+  try{
+    stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});
+    video.srcObject = stream;
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    scanLoop = setInterval(()=>{
+      if(video.readyState !== video.HAVE_ENOUGH_DATA) return;
+      canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const img = ctx.getImageData(0,0,canvas.width,canvas.height);
+      const code = jsQR(img.data, img.width, img.height);
+      if(code){ stopScanner(); buscarProducto(code.data); }
+    }, 350);
+  }catch(e){
+    document.querySelector('.scan-box').innerHTML = '<div class="card muted">No se pudo acceder a la cámara. Usa el código manual abajo.</div>';
+  }
+}
+function stopScanner(){
+  if(scanLoop){ clearInterval(scanLoop); scanLoop=null; }
+  if(stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; }
+}
+function buscarManual(){
+  const code = document.getElementById('manual-code').value.trim();
+  if(code) buscarProducto(code);
+}
+async function buscarProducto(codigo){
+  const res = await fetch(`${API}/productos?codigo_interno=${encodeURIComponent(codigo)}&bodega_id=${bodegaActual}`);
+  const arr = await res.json();
+  if(!arr.length){ toast('QR no reconocido: producto no encontrado'); return; }
+  productoEscaneado = arr[0];
+  document.getElementById('producto-info').innerHTML = `
+    <div style="font-weight:700;font-size:16px;">${productoEscaneado.nombre}</div>
+    <div class="muted">Código: ${productoEscaneado.codigo_interno} · Lote: ${productoEscaneado.lote||'s/n'}</div>
+    <div class="muted">Stock actual: ${productoEscaneado.stock_actual} ${productoEscaneado.unidad_medida}</div>
+  `;
+  onTipoChange();
+  showScreen('confirmar');
+}
+function onTipoChange(){
+  const tipo = document.getElementById('tipo-movimiento').value;
+  document.getElementById('campos-muestra').classList.toggle('hidden', tipo !== 'MUESTRA');
+}
+async function confirmarMovimiento(){
+  const tipo = document.getElementById('tipo-movimiento').value;
+  const cantidad = Number(document.getElementById('cantidad-movimiento').value);
+  const body = {
+    producto_id: productoEscaneado.id, tipo, cantidad,
+    operario: session.nombre,
+    responsable_muestra: document.getElementById('responsable-muestra').value,
+    destino_muestra: document.getElementById('destino-muestra').value,
+  };
+  const res = await fetch(API+'/movimientos', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+  const data = await res.json();
+  if(!res.ok){ toast(data.error || 'Error al registrar'); return; }
+  lastMovId = data.movimiento_id;
+  toast('✓ Movimiento registrado');
+  showScreen('home');
+}
+async function undoLast(){
+  const res = await fetch(`${API}/movimientos/ultimo?operario=${encodeURIComponent(session?.nombre||'')}`);
+  const mov = await res.json();
+  if(!mov){ toast('No hay movimientos recientes'); return; }
+  await fetch(`${API}/movimientos/${mov.id}/deshacer`, {method:'POST'});
+  toast('↩️ Último escaneo deshecho (' + mov.producto_nombre + ')');
+  loadResumen();
+}
+
+// ---------- Crear producto / QR ----------
+async function crearProducto(){
+  const body = {
+    bodega_id: bodegaActual,
+    nombre: document.getElementById('c-nombre').value,
+    codigo_interno: document.getElementById('c-codigo').value,
+    unidad_medida: document.getElementById('c-unidad').value,
+    lote: document.getElementById('c-lote').value,
+    fecha_vencimiento: document.getElementById('c-vencimiento').value,
+    precio_costo: Number(document.getElementById('c-precio').value || 0),
+    stock_minimo: Number(document.getElementById('c-stockmin').value || 5),
+  };
+  if(!body.nombre || !body.codigo_interno || !body.unidad_medida){ toast('Completa nombre, código y unidad'); return; }
+  const res = await fetch(API+'/productos', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+  const data = await res.json();
+  if(!res.ok){ toast(data.error||'Error'); return; }
+  const div = document.getElementById('qr-canvas-display');
+  div.innerHTML='';
+  const canvas = document.createElement('canvas');
+  await QRCode.toCanvas(canvas, body.codigo_interno, {width:200, color:{dark:'#1B1B1B', light:'#ffffff'}});
+  div.appendChild(canvas);
+  document.getElementById('qr-label').textContent = `${body.nombre} — ${body.codigo_interno}`;
+  document.getElementById('qr-resultado').classList.remove('hidden');
+  toast('✓ Producto y QR generados');
+}
+
+// ---------- Historial ----------
+async function loadHistorial(){
+  const arr = await (await fetch(API+'/movimientos?bodega_id='+bodegaActual+'&limit=30')).json();
+  const tipoLabel = {ENTRADA:'Entrada', SALIDA:'Salida', MUESTRA:'Muestra'};
+  document.getElementById('historial-list').innerHTML = arr.length ? arr.map(m=>`
+    <div class="hist-item">
+      <div>
+        <div class="h-main">${m.producto_nombre}</div>
+        <div class="h-sub">${m.operario} · ${new Date(m.fecha+'Z').toLocaleString('es-CL')}</div>
+      </div>
+      <div class="badge ${m.tipo==='ENTRADA'?'badge-green':m.tipo==='MUESTRA'?'badge-amber':'badge-red'}">${tipoLabel[m.tipo]} ${m.cantidad}</div>
+    </div>
+  `).join('') : '<div class="muted">Sin movimientos aún</div>';
+}
+
+function toast(msg){
+  const t = document.createElement('div');
+  t.className='toast'; t.textContent=msg;
+  document.body.appendChild(t);
+  setTimeout(()=>t.remove(), 2200);
+}
+</script>
+</body>
+</html>
