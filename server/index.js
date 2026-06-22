@@ -61,14 +61,25 @@ app.get('/api/productos/:id', (req, res) => {
 });
 
 app.post('/api/productos', (req, res) => {
-  const { bodega_id, codigo_interno, nombre, unidad_medida, lote, fecha_vencimiento, precio_costo, stock_minimo } = req.body;
+  const { bodega_id, codigo_interno, nombre, unidad_medida, lote, fecha_vencimiento, precio_costo, stock_minimo, stock_inicial, operario } = req.body;
   if (!bodega_id || !codigo_interno || !nombre || !unidad_medida) {
     return res.status(400).json({ error: 'Faltan campos obligatorios' });
   }
+  const stockInicial = Number(stock_inicial) > 0 ? Number(stock_inicial) : 0;
   const info = db.prepare(`
     INSERT INTO productos (bodega_id, codigo_interno, nombre, unidad_medida, lote, fecha_vencimiento, precio_costo, stock_minimo, stock_actual)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)
-  `).run(bodega_id, codigo_interno, nombre, unidad_medida, lote || null, fecha_vencimiento || null, precio_costo || 0, stock_minimo || 5);
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(bodega_id, codigo_interno, nombre, unidad_medida, lote || null, fecha_vencimiento || null, precio_costo || 0, stock_minimo || 5, stockInicial);
+
+  // Si se ingresó stock inicial, queda registrado como un movimiento real (ENTRADA)
+  // para que aparezca de inmediato en el historial, las alertas y los gráficos.
+  if (stockInicial > 0) {
+    db.prepare(`
+      INSERT INTO movimientos (producto_id, tipo, cantidad, operario)
+      VALUES (?, 'ENTRADA', ?, ?)
+    `).run(info.lastInsertRowid, stockInicial, operario || 'Sistema');
+  }
+
   const p = db.prepare('SELECT * FROM productos WHERE id = ?').get(info.lastInsertRowid);
   res.status(201).json(productoConEstado(p));
 });
